@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server'
-import { Server } from '@modelcontextprotocol/sdk/server'
+import { Server } from '@modelcontextprotocol/sdk/server/index.js'
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { PassThrough } from 'stream'
-import path from 'path'
 
 type ToolDef = any
 
@@ -11,19 +12,19 @@ export interface McpServerOptions {
 }
 
 export function buildMcpServer(_opts?: McpServerOptions) {
-  const server = new Server({ name: 'ai-tool-marketplace', version: '0.1.0' }, { capabilities: { logging: {} } })
+  const server = new Server(
+    { name: 'ai-tool-marketplace', version: '0.1.0' },
+    {
+      capabilities: {
+        tools: {},
+        logging: {}
+      }
+    }
+  )
   return server
 }
 
 export function attachHandlers(server: Server, req: NextRequest, opts: McpServerOptions) {
-  // Resolve schemas at runtime to avoid bundler export issues
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const pkgPath = require.resolve('@modelcontextprotocol/sdk/package.json')
-  const baseDir = path.dirname(pkgPath)
-  const typesPath = path.join(baseDir, 'types.js')
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { ListToolsRequestSchema, CallToolRequestSchema } = require(typesPath)
-
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return { tools: await opts.listTools(req) }
   })
@@ -40,13 +41,6 @@ export function createNodeStreamTransport() {
   // Use a PassThrough to bridge Node streams for Next Response streaming
   const input = new PassThrough()
   const output = new PassThrough()
-  // Resolve stdio transport at runtime to avoid bundler export issues
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const pkgPath = require.resolve('@modelcontextprotocol/sdk/package.json')
-  const baseDir = path.dirname(pkgPath)
-  const stdioPath = path.join(baseDir, 'server/stdio.js')
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { StdioServerTransport } = require(stdioPath)
   const transport = new StdioServerTransport(input as any, output as any)
   return { transport, input, output }
 }

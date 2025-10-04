@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
     const token = signToken({ workspaceId: Number(workspaceId) }, secret, 600)
     const url = new URL('/api/mcp/stream', req.nextUrl.origin)
     url.searchParams.set('workspaceId', String(workspaceId))
+    url.searchParams.set('token', token)  // Include token in URL for streaming compatibility
     return NextResponse.json({ url: url.toString(), token })
   } catch (e: any) {
     const status = e?.status ?? 500

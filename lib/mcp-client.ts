@@ -12,6 +12,8 @@ export class MCPClient {
 
   async connect() {
     const url = new URL(this.config.url)
+    // StreamableHTTPClientTransport's constructor types can vary by SDK version.
+    // Use the 2-argument form and supply headers via the second options bag.
     const transport = new StreamableHTTPClientTransport(url, {
       requestInit: {
         headers: {
@@ -19,7 +21,7 @@ export class MCPClient {
           'Content-Type': 'application/json',
         },
       },
-    })
+    } as any)
 
     this.client = new Client({ name: 'copilotkit-mcp-client', version: '1.0.0' })
     await this.client.connect(transport as any)
