@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server'
 import { Server } from '@modelcontextprotocol/sdk/server'
-import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types'
 import { PassThrough } from 'stream'
 
 type ToolDef = any
@@ -16,11 +15,18 @@ export function buildMcpServer(_opts?: McpServerOptions) {
 }
 
 export function attachHandlers(server: Server, req: NextRequest, opts: McpServerOptions) {
+  // Resolve schemas at runtime to avoid bundler export issues
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const pkgPath = require.resolve('@modelcontextprotocol/sdk/package.json')
+  const typesPath = pkgPath.replace(/package\.json$/, 'dist/esm/types.js')
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { ListToolsRequestSchema, CallToolRequestSchema } = require(typesPath)
+
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return { tools: await opts.listTools(req) }
   })
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
     const name = request.params.name
     const args = request.params.arguments ?? {}
     const result = await opts.callTool(name, args, req)
