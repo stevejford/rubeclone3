@@ -424,14 +424,14 @@ export async function checkMCPConnectionStatus(
  * Generate secure state parameter for OAuth flow
  */
 // function generateSecureState(userId: string, workspaceId: string, toolkit: string, source: string = 'workspace'): string {
-  const data = {
-    userId,
-    workspaceId,
-    toolkit,
-    source, // 'marketplace' or 'workspace'
-    timestamp: Date.now(),
-    nonce: Math.random().toString(36).substring(2),
-  };
-
-  return Buffer.from(JSON.stringify(data)).toString('base64url');
+//   const data = {
+//     userId,
+//     workspaceId,
+//     toolkit,
+//     source, // 'marketplace' or 'workspace'
+//     timestamp: Date.now(),
+//     nonce: Math.random().toString(36).substring(2),
+//   };
+//
+//   return Buffer.from(JSON.stringify(data)).toString('base64url');
 // }
