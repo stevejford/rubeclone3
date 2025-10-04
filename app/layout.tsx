@@ -1,8 +1,6 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { AuthProvider } from '@/components/providers/session-provider'
-import { CopilotKit } from '@copilotkit/react-core'
-import '@copilotkit/react-ui/styles.css'
 import { WorkspaceProvider } from '@/lib/contexts/workspace-context'
 import { Toaster } from 'sonner'
 import './globals.css'
@@ -85,11 +83,7 @@ export default function RootLayout({
         <AuthProvider>
           <WorkspaceProvider>
             <div className="relative flex min-h-screen flex-col">
-              <div className="flex-1">
-                <CopilotKit runtimeUrl="/api/copilotkit">
-                  {children}
-                </CopilotKit>
-              </div>
+              <div className="flex-1">{children}</div>
             </div>
             <Toaster />
           </WorkspaceProvider>
