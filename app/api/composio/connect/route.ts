@@ -6,6 +6,7 @@ import { isValidToolkit } from '@/lib/composio'
 import { ComposioClient, encodeState, composioUserId } from '@/lib/composioClient'
 import { getWorkspaceWithPermissions } from '@/lib/db/queries'
 import { aiConfig } from '@/lib/env'
+import { randomUUID } from 'crypto'
 
 /**
  * API endpoint for initiating Composio OAuth connections
@@ -84,7 +85,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const requestId = randomUUID()
     console.log('🔗 OAuth Connect Debug:', {
+      requestId,
       userId: session.user.id,
       workspaceId,
       toolkit,
@@ -105,7 +108,7 @@ export async function POST(request: NextRequest) {
       state,
     )
 
-    console.log('✅ Connection initiated:', connectionResult)
+    console.log('✅ Connection initiated:', { requestId, redirectUrl: connectionResult.redirectUrl, state })
 
     return NextResponse.json({
       success: true,
@@ -113,6 +116,7 @@ export async function POST(request: NextRequest) {
       state: connectionResult.state,
       toolkit,
       workspaceId,
+      requestId,
     })
 
   } catch (error) {
@@ -142,10 +146,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
