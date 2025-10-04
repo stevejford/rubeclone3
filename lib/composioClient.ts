@@ -28,16 +28,17 @@ export class ComposioClient {
 
   async linkOAuth(userId: string, toolkit: string, callbackUrl: string, state: string): Promise<ComposioConnectionResult> {
     const auth = await this.ensureAuthConfig(toolkit)
-    const res = await this.sdk.connectedAccounts.link(userId, auth.id, { callbackUrl, state })
-    return { redirectUrl: res.redirectUrl, state: res.state || state, connectionId: res.id }
+    // Some SDK versions only accept { callbackUrl }
+    const res: any = await (this.sdk as any).connectedAccounts.link(userId, auth.id, { callbackUrl })
+    return { redirectUrl: res?.redirectUrl ?? res?.redirect_url ?? callbackUrl, state, connectionId: res?.id ?? res?.connectionId }
   }
 
   async initiateApiKey(userId: string, toolkit: string, kv: Record<string, string>) {
     const auth = await this.ensureAuthConfig(toolkit)
-    return this.sdk.connectedAccounts.initiate(userId, auth.id, { config: { authScheme: 'API_KEY' as any, val: kv } })
+    return (this.sdk as any).connectedAccounts.initiate(userId, auth.id, { config: { authScheme: 'API_KEY', val: kv } as any })
   }
 
-  async getConnectionStatus(userId: string, toolkit: string): Promise<ComposioConnectionStatus> {
+  async getConnectionStatus(_userId: string, _toolkit: string): Promise<ComposioConnectionStatus> {
     try {
       // Not all SDKs expose status; return optimistic connected for now
       return { isConnected: true, status: 'connected' }

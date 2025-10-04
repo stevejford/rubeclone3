@@ -205,7 +205,6 @@ export async function GET(request: NextRequest) {
       }
 
       // Complete the OAuth connection with Composio
-      const client = new ComposioClient()
       // With hosted OAuth via SDK link, completion may be implicit; enable tool using toolkit from state
       const connectionResult = { toolkit: stateData.toolkit, connectionId: '' }
 
