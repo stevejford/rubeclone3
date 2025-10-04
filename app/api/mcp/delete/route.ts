@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { requireMcpEnabled } from '@/lib/mcp/config'
 
-export async function DELETE(req: NextRequest) {
+export async function DELETE() {
   try {
     requireMcpEnabled()
     // No persisted servers yet; respond OK for API completeness
