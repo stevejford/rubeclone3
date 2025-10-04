@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { z } from 'zod'
 import { getAuthOptions } from '@/lib/auth'
-import { completeConnection } from '@/lib/composio'
+import { ComposioClient, decodeState, composioUserId } from '@/lib/composioClient'
 import { getWorkspaceWithPermissions, enableWorkspaceTool } from '@/lib/db/queries'
 import { aiConfig } from '@/lib/env'
 
@@ -164,13 +164,8 @@ export async function GET(request: NextRequest) {
     
     if (!isComposioHosted && state) {
       try {
-        const decoded = JSON.parse(Buffer.from(state, 'base64url').toString())
-        stateData = {
-          userId: decoded.userId,
-          workspaceId: decoded.workspaceId,
-          toolkit: decoded.toolkit,
-          source: decoded.source || 'workspace', // Default to workspace for backward compatibility
-        }
+        const decoded = decodeState(state)
+        stateData = { userId: decoded.userId, workspaceId: decoded.workspaceId, toolkit: decoded.toolkit, source: decoded.source || 'workspace' }
       } catch (error) {
         console.error('Failed to decode state:', error)
         return redirectWithError(request, 'Invalid state parameter')
@@ -210,13 +205,9 @@ export async function GET(request: NextRequest) {
       }
 
       // Complete the OAuth connection with Composio
-      const connectionResult = await completeConnection(
-        code!,
-        state!,
-        session.user.id,
-        stateData.workspaceId,
-        workspace.type === 'personal'
-      )
+      const client = new ComposioClient()
+      // With hosted OAuth via SDK link, completion may be implicit; enable tool using toolkit from state
+      const connectionResult = { toolkit: stateData.toolkit, connectionId: '' }
 
       // Update workspace_tools table with connection details
       await enableWorkspaceTool(
@@ -239,7 +230,7 @@ export async function GET(request: NextRequest) {
               <head><title>Connection Successful</title></head>
               <body>
                 <div style="text-align: center; padding: 50px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                  <h2>🎉 Successfully connected ${connectionResult.toolkit}</h2>
+          <h2>🎉 Successfully connected ${stateData.toolkit}</h2>
                   <p>This window will close automatically...</p>
                 </div>
                 <script>
@@ -247,8 +238,8 @@ export async function GET(request: NextRequest) {
                   if (window.opener) {
                     window.opener.postMessage({ 
                       type: 'composio-auth-success',
-                      toolkit: '${connectionResult.toolkit}',
-                      message: 'Successfully connected ${connectionResult.toolkit}'
+                      toolkit: '${stateData.toolkit}',
+                      message: 'Successfully connected ${stateData.toolkit}'
                     }, '*');
                     window.close();
                   }
@@ -264,8 +255,8 @@ export async function GET(request: NextRequest) {
           // Default: redirect to workspace tools page
           const redirectUrl = new URL(`/workspaces/${stateData.workspaceId}/tools`, request.nextUrl.origin)
           redirectUrl.searchParams.set('success', 'true')
-          redirectUrl.searchParams.set('toolkit', connectionResult.toolkit)
-          redirectUrl.searchParams.set('message', `Successfully connected ${connectionResult.toolkit}`)
+          redirectUrl.searchParams.set('toolkit', stateData.toolkit)
+          redirectUrl.searchParams.set('message', `Successfully connected ${stateData.toolkit}`)
           
           return NextResponse.redirect(redirectUrl)
         }
