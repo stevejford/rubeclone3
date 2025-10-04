@@ -47,16 +47,16 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const params = {
       // Traditional OAuth parameters
-      code: searchParams.get('code'),
-      state: searchParams.get('state'),
-      error: searchParams.get('error'),
-      error_description: searchParams.get('error_description'),
+      code: searchParams.get('code') ?? undefined,
+      state: searchParams.get('state') ?? undefined,
+      error: searchParams.get('error') ?? undefined,
+      error_description: searchParams.get('error_description') ?? undefined,
       // Composio hosted authentication parameters
-      success: searchParams.get('success'),
-      userId: searchParams.get('userId'),
-      toolkit: searchParams.get('toolkit'),
-      connectionId: searchParams.get('connectionId'),
-      message: searchParams.get('message'),
+      success: searchParams.get('success') ?? undefined,
+      userId: searchParams.get('userId') ?? undefined,
+      toolkit: searchParams.get('toolkit') ?? undefined,
+      connectionId: searchParams.get('connectionId') ?? undefined,
+      message: searchParams.get('message') ?? undefined,
     }
 
     console.log('🔍 OAuth Callback Debug:', {

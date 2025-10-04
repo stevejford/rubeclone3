@@ -2,3 +2,4 @@ process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgres://user:pass@loc
 process.env.NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || 'testsecret'
 process.env.NEXTAUTH_URL = process.env.NEXTAUTH_URL || 'http://localhost:3000'
 process.env.ENABLE_MCP_INSTALL = process.env.ENABLE_MCP_INSTALL || '1'
+process.env.COMPOSIO_API_KEY = process.env.COMPOSIO_API_KEY || 'test-api-key'
