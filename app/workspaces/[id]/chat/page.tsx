@@ -8,21 +8,8 @@ import '@copilotkit/react-ui/styles.css'
 
 const CopilotSidebar = dynamic(() => import('@copilotkit/react-ui').then(m => m.CopilotSidebar), { ssr: false })
 
-export default function WorkspaceChatPage() {
-  const { data: session } = useSession()
-  const params = useParams()
-  const workspaceId = params?.id as string
-
-  if (!session) {
-    return <div className="p-6">Please log in to access this workspace chat.</div>
-  }
-
-  const headers = {
-    'X-Workspace-ID': workspaceId,
-    'X-User-ID': session.user.id,
-  } as Record<string, string>
-
-  // Frontend tool: Connect a Composio toolkit via OAuth popup (legacy hook)
+function ChatInner({ workspaceId }: { workspaceId: string }) {
+  // Frontend tool: Connect a Composio toolkit via OAuth popup (legacy hook). Must be inside <CopilotKit/>.
   useCopilotAction({
     name: 'connectToolkit',
     description: 'Connect a Composio toolkit (e.g., google_maps) for this workspace by opening an OAuth window.',
@@ -73,6 +60,23 @@ export default function WorkspaceChatPage() {
     },
   })
 
+  return null
+}
+
+export default function WorkspaceChatPage() {
+  const { data: session } = useSession()
+  const params = useParams()
+  const workspaceId = params?.id as string
+
+  if (!session) {
+    return <div className="p-6">Please log in to access this workspace chat.</div>
+  }
+
+  const headers = {
+    'X-Workspace-ID': workspaceId,
+    'X-User-ID': session.user.id,
+  } as Record<string, string>
+
   return (
     <CopilotKit
       runtimeUrl="/api/copilotkit"
@@ -89,6 +93,8 @@ export default function WorkspaceChatPage() {
           labels={{ title: 'Workspace Assistant', initial: 'How can I help you?' }}
           defaultOpen
         />
+        {/* Mount frontend tools inside CopilotKit provider */}
+        <ChatInner workspaceId={workspaceId} />
       </div>
     </CopilotKit>
   )
