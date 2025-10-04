@@ -87,3 +87,8 @@ export async function GET(req: NextRequest) {
     return new Response(e?.message || 'Internal Server Error', { status })
   }
 }
+
+export async function POST(req: NextRequest) {
+  // Mirror GET behavior to satisfy HTTP clients that open streams via POST
+  return GET(req)
+}

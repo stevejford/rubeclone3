@@ -22,8 +22,10 @@ export default function WorkspaceChatPage() {
     'X-User-ID': session.user.id,
   } as Record<string, string>
 
+  const publicKey = process.env.NEXT_PUBLIC_COPILOTKIT_PUBLIC_API_KEY
+
   return (
-    <CopilotKit runtimeUrl="/api/copilotkit" headers={headers}>
+    <CopilotKit runtimeUrl="/api/copilotkit" headers={headers} publicApiKey={publicKey}>
       <div className="flex h-[calc(100vh-64px)]">
         <main className="flex-1 p-6">
           <h1 className="text-2xl font-semibold">Workspace Chat</h1>

@@ -40,7 +40,13 @@ export async function POST(req: NextRequest) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ workspaceId })
-    }).then(r => r.ok ? r.json() : null)
+    }).then(async r => {
+      if (!r.ok) {
+        const t = await r.text().catch(() => '')
+        throw new Error(`servers POST failed: ${r.status} ${t}`)
+      }
+      return r.json()
+    })
     if (!signed?.url || !signed?.token) {
       return new Response('Failed to configure MCP', { status: 500 })
     }
@@ -59,7 +65,10 @@ export async function POST(req: NextRequest) {
           const mcp = new MCPClient({ url: signed.url, token: signed.token })
           try {
             await mcp.connect()
-            const toolsRes: any = await mcp.listTools()
+            const toolsRes: any = await mcp.listTools().catch((e: any) => {
+              logger.error('mcp_list_tools_error', { requestId, error: e?.message || String(e) })
+              throw e
+            })
             const enabled = (await getWorkspaceTools(Number(workspaceId)))
               .filter(t => t.is_enabled)
               .map(t => t.tool_slug)

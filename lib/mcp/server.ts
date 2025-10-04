@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { Server } from '@modelcontextprotocol/sdk/server'
 import { PassThrough } from 'stream'
+import path from 'path'
 
 type ToolDef = any
 
@@ -18,7 +19,8 @@ export function attachHandlers(server: Server, req: NextRequest, opts: McpServer
   // Resolve schemas at runtime to avoid bundler export issues
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const pkgPath = require.resolve('@modelcontextprotocol/sdk/package.json')
-  const typesPath = pkgPath.replace(/package\.json$/, 'dist/esm/types.js')
+  const baseDir = path.dirname(pkgPath)
+  const typesPath = path.join(baseDir, 'types.js')
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { ListToolsRequestSchema, CallToolRequestSchema } = require(typesPath)
 
@@ -41,7 +43,8 @@ export function createNodeStreamTransport() {
   // Resolve stdio transport at runtime to avoid bundler export issues
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const pkgPath = require.resolve('@modelcontextprotocol/sdk/package.json')
-  const stdioPath = pkgPath.replace(/package\.json$/, 'dist/esm/server/stdio.js')
+  const baseDir = path.dirname(pkgPath)
+  const stdioPath = path.join(baseDir, 'server/stdio.js')
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { StdioServerTransport } = require(stdioPath)
   const transport = new StdioServerTransport(input as any, output as any)
