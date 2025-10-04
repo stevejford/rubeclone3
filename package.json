@@ -8,6 +8,10 @@
     "start": "next start",
     "lint": "next lint --no-inline-config || echo 'lint warnings'",
     "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:all": "npm run type-check && npm run test:unit && npm run test:integration",
     "components:add": "npx shadcn@latest add",
     "db:generate": "tsx scripts/generate-migration.ts",
     "db:migrate": "tsx scripts/migrate.ts",
@@ -77,7 +81,11 @@
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "tsx": "^4.7.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^2.0.5",
+    "vite": "^5.4.8",
+    "vite-tsconfig-paths": "^5.0.1",
+    "@vitest/coverage-v8": "^2.0.5"
   },
   "engines": {
     "node": ">=19.0.0"
