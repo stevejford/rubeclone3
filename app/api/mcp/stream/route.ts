@@ -123,7 +123,10 @@ async function handleJsonRpcRequest(rpcReq: JsonRpcRequest, req: NextRequest, ve
         // If the tool is an auth helper, initiate OAuth and return a link
         if (typeof name === 'string' && name.startsWith('auth_')) {
           const toolkit = name.slice(5)
-          const res = await fetch(new URL('/api/composio/connect', req.nextUrl.origin), {
+          const proto = req.headers.get('x-forwarded-proto') || 'http'
+          const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'localhost:3000'
+          const origin = `${proto}://${host}`
+          const res = await fetch(new URL('/api/composio/connect', origin), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', cookie: req.headers.get('cookie') || '' },
             body: JSON.stringify({
@@ -160,7 +163,10 @@ async function handleJsonRpcRequest(rpcReq: JsonRpcRequest, req: NextRequest, ve
         }
 
         // Otherwise, proxy execution to existing endpoint
-        const res = await fetch(new URL('/api/composio/execute', req.nextUrl.origin), {
+        const proto = req.headers.get('x-forwarded-proto') || 'http'
+        const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'localhost:3000'
+        const origin = `${proto}://${host}`
+        const res = await fetch(new URL('/api/composio/execute', origin), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', cookie: req.headers.get('cookie') || '' },
           body: JSON.stringify({
