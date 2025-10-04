@@ -22,7 +22,7 @@ export default function WorkspaceChatPage() {
     'X-User-ID': session.user.id,
   } as Record<string, string>
 
-  const publicKey = process.env.NEXT_PUBLIC_COPILOTKIT_PUBLIC_API_KEY
+  const publicKey = process.env.NEXT_PUBLIC_COPILOTKIT_PUBLIC_API_KEY || ''
 
   return (
     <CopilotKit runtimeUrl="/api/copilotkit" headers={headers} publicApiKey={publicKey}>
