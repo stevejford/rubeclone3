@@ -19,8 +19,10 @@ export async function GET(req: NextRequest) {
     }
 
     const { transport, input, output } = createNodeStreamTransport()
-    const server = buildMcpServer({
-      listTools: async (request) => {
+    const server = buildMcpServer()
+
+    attachHandlers(server, req, {
+      listTools: async (request: NextRequest) => {
         const qp = request.nextUrl.searchParams
         const workspaceId = qp.get('workspaceId')
         if (!workspaceId) return []
@@ -35,12 +37,11 @@ export async function GET(req: NextRequest) {
             inputSchema: { type: 'object', properties: {}, additionalProperties: true },
           }))
       },
-      callTool: async (name, args) => {
-        // For Phase 2, we proxy to existing execute endpoint to reuse auth/logic
-        // You can later inline the execution via composio client
-        const res = await fetch(new URL('/api/composio/execute', req.nextUrl.origin), {
+      callTool: async (name: string, args: any, request: NextRequest) => {
+        // Phase 2: proxy to existing execute endpoint to reuse auth/logic
+        const res = await fetch(new URL('/api/composio/execute', request.nextUrl.origin), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', cookie: req.headers.get('cookie') || '' },
+          headers: { 'Content-Type': 'application/json', cookie: request.headers.get('cookie') || '' },
           body: JSON.stringify({
             workspaceId: (verify as any).payload?.workspaceId,
             toolSlug: name,
@@ -52,15 +53,9 @@ export async function GET(req: NextRequest) {
           const text = await res.text()
           return `Execution failed: ${res.status} ${text}`
         }
-        const json = await res.json()
-        return json
+        return await res.json()
       },
     })
-
-    attachHandlers(server, req, {
-      listTools: async (r) => await (server as any).handlers.get('tools/list')(r),
-      callTool: async (n, a, r) => await (server as any).handlers.get('tools/call')({ name: n, arguments: a }, r),
-    } as any)
 
     await server.connect(transport)
 
