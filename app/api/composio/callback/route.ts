@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { getAuthOptions } from '@/lib/auth'
 import { decodeState } from '@/lib/composioClient'
 import { randomUUID } from 'crypto'
+import { logger } from '@/lib/log'
 import { getWorkspaceWithPermissions, enableWorkspaceTool } from '@/lib/db/queries'
 import { aiConfig } from '@/lib/env'
 
@@ -28,7 +29,7 @@ const callbackParamsSchema = z.object({
 
 export async function GET(request: NextRequest) {
   const requestId = randomUUID()
-  console.log('🚨 CALLBACK ROUTE HIT! URL:', { requestId, url: request.nextUrl.href })
+  logger.info('callback_hit', { requestId, url: request.nextUrl.href })
   console.log('🚨 ALL SEARCH PARAMS:', Object.fromEntries(request.nextUrl.searchParams.entries()))
   
   try {
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
       message: searchParams.get('message') ?? undefined,
     }
 
-    console.log('🔍 OAuth Callback Debug:', {
+    logger.debug('callback_params', {
       requestId,
       url: request.nextUrl.href,
       params,
@@ -84,15 +85,18 @@ export async function GET(request: NextRequest) {
     })
     
     // TEMPORARY: Log every single parameter that came in
-    console.log('🔍 ALL URL PARAMETERS:', Object.fromEntries(searchParams.entries()))
-    console.log('🔍 FULL CALLBACK URL:', request.nextUrl.href)
-    console.log('🔍 REQUEST METHOD:', request.method)
-    console.log('🔍 REQUEST HEADERS:', Object.fromEntries(request.headers.entries()))
+    logger.debug('callback_raw', {
+      requestId,
+      allParams: Object.fromEntries(searchParams.entries()),
+      url: request.nextUrl.href,
+      method: request.method,
+      headers: Object.fromEntries(request.headers.entries()),
+    })
 
     const parseResult = callbackParamsSchema.safeParse(params)
 
     if (!parseResult.success) {
-      console.error('❌ Callback validation failed:', {
+      logger.warn('callback_params_invalid', {
         errors: parseResult.error.errors,
         receivedParams: params,
         expectedSchema: 'code (string), state (string), error (optional string), error_description (optional string)'
@@ -104,11 +108,11 @@ export async function GET(request: NextRequest) {
 
     // Detect if this is Composio hosted authentication or traditional OAuth
     const isComposioHosted = !!(success || userId || toolkit || connectionId)
-    console.log(`🔍 Authentication type: ${isComposioHosted ? 'Composio Hosted' : 'Traditional OAuth'}`)
+    logger.info('callback_type', { requestId, type: isComposioHosted ? 'hosted' : 'traditional' })
 
     if (isComposioHosted) {
       // Handle Composio hosted authentication
-      console.log('✅ Composio hosted authentication detected', { requestId })
+      logger.info('callback_hosted_detected', { requestId })
       
       if (success === 'true' && toolkit && userId) {
         // Success case for hosted authentication
@@ -143,7 +147,7 @@ export async function GET(request: NextRequest) {
       } else {
         // Error case for hosted authentication
         const errorMsg = message || 'Authentication failed'
-        console.error('Composio hosted auth error:', { requestId, error: errorMsg })
+        logger.warn('callback_hosted_error', { requestId, error: errorMsg })
         return redirectWithError(request, errorMsg)
       }
     } else {
@@ -151,7 +155,7 @@ export async function GET(request: NextRequest) {
       // Handle OAuth errors
       if (error) {
         const errorMessage = error_description || `OAuth error: ${error}`
-        console.error('OAuth callback error:', { requestId, error: errorMessage })
+        logger.warn('callback_traditional_error', { requestId, error: errorMessage })
         return redirectWithError(request, errorMessage)
       }
 
@@ -170,16 +174,16 @@ export async function GET(request: NextRequest) {
         const decoded = decodeState(state)
         stateData = { userId: decoded.userId, workspaceId: decoded.workspaceId, toolkit: decoded.toolkit, source: decoded.source || 'workspace' }
       } catch (error) {
-        console.error('Failed to decode state:', { requestId, error })
+        logger.warn('callback_state_decode_failed', { requestId, error: error instanceof Error ? error.message : String(error) })
         return redirectWithError(request, 'Invalid state parameter')
       }
     } else if (isComposioHosted) {
       // For Composio hosted authentication, we already handled the success case above
       // This should not be reached, but just in case
-      console.log('Composio hosted auth - no state decode needed')
+      logger.debug('callback_hosted_no_state')
       return redirectWithError(request, 'Unexpected flow for hosted authentication')
     } else {
-      console.error('No state parameter for traditional OAuth', { requestId })
+      logger.warn('callback_traditional_missing_state', { requestId })
       return redirectWithError(request, 'Missing state parameter')
     }
 
@@ -265,7 +269,7 @@ export async function GET(request: NextRequest) {
       }
 
   } catch (error) {
-    console.error('Composio callback error:', error)
+    logger.error('callback_unhandled_error', { error: error instanceof Error ? error.message : String(error) })
     
     // Handle specific error types
     let errorMessage = 'Failed to complete connection'

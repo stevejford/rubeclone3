@@ -3,7 +3,6 @@ import { NextRequest } from 'next/server'
 import { GET as statusGet } from '@/app/api/mcp/status/route'
 
 function makeReq(url: string) {
-  // @ts-expect-error accept broader init shape for tests
   return new NextRequest(url)
 }
 

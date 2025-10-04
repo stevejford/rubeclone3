@@ -9,7 +9,6 @@ vi.mock('next-auth', async () => {
 })
 
 function makeReq(url: string) {
-  // @ts-expect-error accept broader init shape for tests
   return new NextRequest(url)
 }
 

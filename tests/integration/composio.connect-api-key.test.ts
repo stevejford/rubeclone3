@@ -1,9 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 import * as queries from '@/lib/db/queries'
-import * as mcp from '@/lib/composio-mcp'
 import { POST as connectApiKey } from '@/app/api/composio/connect-api-key/route'
-import { getAuthOptions } from '@/lib/auth'
 import { getServerSession } from 'next-auth'
 
 vi.mock('next-auth', async () => {

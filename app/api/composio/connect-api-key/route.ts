@@ -2,23 +2,21 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { z } from 'zod'
 import { getAuthOptions } from '@/lib/auth'
-import { isValidToolkit } from '@/lib/composio'
-import { ComposioClient, encodeState, composioUserId } from '@/lib/composioClient'
-import { getWorkspaceWithPermissions } from '@/lib/db/queries'
-import { aiConfig } from '@/lib/env'
-import { randomUUID } from 'crypto'
+import { getComposioMCPClient } from '@/lib/composio-mcp'
+import { getWorkspaceWithPermissions, enableWorkspaceTool } from '@/lib/db/queries'
 import { logger } from '@/lib/log'
 import { rateLimit } from '@/lib/rateLimit'
+import { aiConfig } from '@/lib/env'
 
 /**
- * API endpoint for initiating Composio OAuth connections
- * POST /api/composio/connect
+ * API endpoint for connecting with API keys via Composio
+ * POST /api/composio/connect-api-key
  */
 
-const connectRequestSchema = z.object({
-  workspaceId: z.preprocess(v => Number(v), z.number().int().positive()),
+const connectApiKeySchema = z.object({
+  workspaceId: z.string().transform(Number),
   toolkit: z.string().min(1).max(50),
-  source: z.enum(['marketplace','workspace']).default('workspace'),
+  apiKey: z.string().min(1).max(500),
 })
 
 export async function POST(request: NextRequest) {
@@ -42,7 +40,7 @@ export async function POST(request: NextRequest) {
 
     // Parse and validate request body
     const body = await request.json()
-    const parseResult = connectRequestSchema.safeParse(body)
+    const parseResult = connectApiKeySchema.safeParse(body)
     
     if (!parseResult.success) {
       return NextResponse.json(
@@ -57,15 +55,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { workspaceId, toolkit, source } = parseResult.data
-
-    // Validate toolkit name
-    if (!isValidToolkit(toolkit)) {
-      return NextResponse.json(
-        { error: 'Invalid toolkit name' },
-        { status: 400 }
-      )
-    }
+    const { workspaceId, toolkit, apiKey } = parseResult.data
 
     // Verify workspace permissions (owner/admin only)
     const workspace = await getWorkspaceWithPermissions(workspaceId, parseInt(session.user.id))
@@ -87,54 +77,58 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const requestId = randomUUID()
+    const requestId = `${session.user.id}:${workspaceId}:${toolkit}:${Date.now()}`
     const rlKey = `${session.user.id}:${workspaceId}:${toolkit}`
-    if (!rateLimit('connect', rlKey, 5, 60_000)) {
+    if (!rateLimit('connect_api_key', rlKey, 10, 60_000)) {
       logger.warn('rate_limit_exceeded', { requestId, userId: session.user.id, workspaceId, toolkit })
       return NextResponse.json({
-        error: 'Too many connect attempts. Please wait a minute and try again.',
+        error: 'Too many API key connect attempts. Please wait a minute and try again.',
         code: 'RATE_LIMITED',
         remediation: 'Wait at least 60 seconds before retrying connect.'
       }, { status: 429 })
     }
-    logger.info('connect_start', { requestId, userId: session.user.id, workspaceId, toolkit, source, isPersonal: workspace.type === 'personal' })
+    logger.info('api_key_connect_start', { requestId, userId: session.user.id, workspaceId, toolkit })
 
-    // Build callback URL from request origin
-    const callbackUrl = new URL('/api/composio/callback', request.nextUrl.origin).toString()
+    // Connect with API key using Composio MCP client
+    const mcpClient = getComposioMCPClient()
+    const connectionResult = await mcpClient.connectWithApiKey(session.user.id, toolkit, apiKey)
 
-    // Initiate OAuth via SDK facade
-    const client = new ComposioClient()
-    const state = encodeState(session.user.id, workspaceId.toString(), toolkit, source)
-    const connectionResult = await client.linkOAuth(
-      composioUserId(session.user.id, workspaceId.toString(), workspace.type === 'personal'),
-      toolkit,
-      callbackUrl,
-      state,
-    )
+    if (connectionResult.success) {
+      logger.info('api_key_connect_success', { requestId, toolkit, connectionId: connectionResult.connectionId })
+      
+      // Update workspace_tools table with connection details
+      await enableWorkspaceTool(
+        workspaceId,
+        toolkit,
+        parseInt(session.user.id),
+        {
+          connectionId: connectionResult.connectionId,
+          connectionStatus: 'connected',
+          authType: 'api_key',
+          lastSync: new Date().toISOString(),
+          connectedAt: new Date().toISOString(),
+        }
+      )
 
-    logger.info('connect_initiated', { requestId, redirectUrl: connectionResult.redirectUrl, state })
-
-    return NextResponse.json({
-      success: true,
-      redirectUrl: connectionResult.redirectUrl,
-      state: connectionResult.state,
-      toolkit,
-      workspaceId,
-      requestId,
-    })
+      return NextResponse.json({
+        success: true,
+        connectionId: connectionResult.connectionId,
+        toolkit,
+        message: `Successfully connected ${toolkit} with API key`
+      })
+    } else {
+      logger.warn('api_key_connect_failed', { requestId, toolkit, error: connectionResult.error })
+      return NextResponse.json({
+        success: false,
+        error: connectionResult.error || 'Failed to connect with API key'
+      }, { status: 400 })
+    }
 
   } catch (error) {
-    logger.error('connect_failed', { error: error instanceof Error ? error.message : String(error) })
+    logger.error('api_key_connect_error', { error: error instanceof Error ? error.message : String(error) })
     
     // Handle specific error types
     if (error instanceof Error) {
-      if (error.message.includes('Invalid toolkit')) {
-        return NextResponse.json(
-          { error: 'The specified toolkit is not supported' },
-          { status: 400 }
-        )
-      }
-      
       if (error.message.includes('Composio client not available')) {
         return NextResponse.json(
           { error: 'Composio service is temporarily unavailable' },
@@ -142,21 +136,24 @@ export async function POST(request: NextRequest) {
         )
       }
       
-      if (error.message.includes('Failed to initiate connection')) {
+      if (error.message.includes('Invalid toolkit')) {
         return NextResponse.json(
-          { error: 'Failed to initiate OAuth connection. Please try again.' },
-          { status: 500 }
+          { error: 'The specified toolkit is not supported' },
+          { status: 400 }
         )
       }
     }
 
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
   }
 }
 
 export async function GET() {
   return NextResponse.json(
-    { error: 'Method not allowed. Use POST to initiate connections.' },
+    { error: 'Method not allowed. Use POST to connect with API keys.' },
     { status: 405 }
   )
 }
