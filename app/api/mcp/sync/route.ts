@@ -60,3 +60,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: e?.message || 'Internal Server Error' }, { status })
   }
 }
+
+export async function GET() {
+  return NextResponse.json({
+    error: 'Method not allowed. Use POST with { workspaceId, tools: [{ toolSlug, enabled, connectionId? }] }',
+    example: {
+      workspaceId: 16,
+      tools: [
+        { toolSlug: 'googlesheets', enabled: true, connectionId: 'ca_...' },
+        { toolSlug: 'github', enabled: false }
+      ]
+    }
+  }, { status: 405 })
+}
