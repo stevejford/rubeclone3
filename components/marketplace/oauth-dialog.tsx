@@ -39,7 +39,7 @@ export function OAuthDialog({
   const supportsApiKey = app.auth_schemes?.includes('API_KEY')
   const supportsBearer = app.auth_schemes?.includes('BEARER_TOKEN')
   // const supportsServiceAccount = app.auth_schemes?.includes('SERVICE_ACCOUNT')
-  const supportsNoAuth = app.auth_schemes?.includes('NO_AUTH')
+  // const supportsNoAuth = app.auth_schemes?.includes('NO_AUTH')
   
   // For debugging
   console.log('🔐 App auth schemes:', app.auth_schemes)
