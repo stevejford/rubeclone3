@@ -1,6 +1,9 @@
 import { NextRequest } from 'next/server'
 import { Server } from '@modelcontextprotocol/sdk/server'
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio'
+// Deep import due to package exports not exposing subpath; use any for types
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import * as StdioServerTransportModule from '@modelcontextprotocol/sdk/dist/esm/server/stdio.js'
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types'
 import { PassThrough } from 'stream'
 
@@ -33,6 +36,7 @@ export function createNodeStreamTransport() {
   // Use a PassThrough to bridge Node streams for Next Response streaming
   const input = new PassThrough()
   const output = new PassThrough()
+  const { StdioServerTransport } = StdioServerTransportModule as any
   const transport = new StdioServerTransport(input as any, output as any)
   return { transport, input, output }
 }
