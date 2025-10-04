@@ -423,7 +423,7 @@ export async function checkMCPConnectionStatus(
 /**
  * Generate secure state parameter for OAuth flow
  */
-function generateSecureState(userId: string, workspaceId: string, toolkit: string, source: string = 'workspace'): string {
+// function generateSecureState(userId: string, workspaceId: string, toolkit: string, source: string = 'workspace'): string {
   const data = {
     userId,
     workspaceId,
@@ -434,4 +434,4 @@ function generateSecureState(userId: string, workspaceId: string, toolkit: strin
   };
 
   return Buffer.from(JSON.stringify(data)).toString('base64url');
-}
+// }
