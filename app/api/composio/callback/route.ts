@@ -118,13 +118,11 @@ export async function GET(request: NextRequest) {
         // Persist connection for the current workspace using state if present
         // Attempt to decode state to identify workspace + source
         let workspaceIdFromState: string | null = null
-        let sourceFromState: string = 'marketplace'
         const stateParam = request.nextUrl.searchParams.get('state')
         if (stateParam) {
           try {
             const decoded = JSON.parse(Buffer.from(stateParam, 'base64url').toString()) as any
             workspaceIdFromState = decoded.workspaceId || null
-            sourceFromState = decoded.source || 'marketplace'
           } catch (e) {
             logger.warn('callback_hosted_state_decode_failed', { requestId, error: e instanceof Error ? e.message : String(e) })
           }
