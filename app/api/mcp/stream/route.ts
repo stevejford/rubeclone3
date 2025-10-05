@@ -167,9 +167,20 @@ async function handleJsonRpcRequest(rpcReq: JsonRpcRequest, req: NextRequest, ve
         const proto = req.headers.get('x-forwarded-proto') || 'http'
         const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'localhost:3000'
         const origin = `${proto}://${host}`
+        // Propagate MCP auth token so server-originated calls are authorized
+        const authzHeader = req.headers.get('authorization') || ''
+        const tokenFromQuery = req.nextUrl.searchParams.get('token') || ''
+        const bearerToken = authzHeader.startsWith('Bearer ')
+          ? authzHeader
+          : (tokenFromQuery ? `Bearer ${tokenFromQuery}` : '')
+
         const res = await fetch(new URL('/api/composio/execute', origin), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', cookie: req.headers.get('cookie') || '' },
+          headers: {
+            'Content-Type': 'application/json',
+            cookie: req.headers.get('cookie') || '',
+            ...(bearerToken ? { authorization: bearerToken } : {}),
+          },
           body: JSON.stringify({
             workspaceId: verify.payload?.workspaceId,
             toolSlug: name,
