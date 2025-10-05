@@ -1,6 +1,7 @@
 "use client"
 
 import dynamic from 'next/dynamic'
+import { useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useParams } from 'next/navigation'
 import { CopilotKit, useCopilotAction } from '@copilotkit/react-core'
@@ -30,7 +31,8 @@ function ChatInner({ workspaceId }: { workspaceId: string }) {
       const data = await res.json()
       const url = (data as any)?.redirectUrl as string | undefined
       if (url) {
-        window.open(url, '_blank', 'noopener,noreferrer,width=600,height=750')
+        // IMPORTANT: do NOT use noopener/noreferrer here, we need window.opener for postMessage + auto-close
+        window.open(url, '_blank', 'width=600,height=750,scrollbars=yes,resizable=yes')
         return `Opened OAuth for ${toolkit}. If you don’t see a window, allow popups and try again.`
       }
       return `Connect response did not include a redirectUrl for ${toolkit}.`
@@ -60,6 +62,24 @@ function ChatInner({ workspaceId }: { workspaceId: string }) {
       return `Opened directions: ${origin} -> ${destination} (${params.get('travelmode')}).`
     },
   })
+
+  // Listen for marketplace-style popup completion messages
+  useEffect(() => {
+    const expectedOrigin = window.location.origin
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== expectedOrigin) return
+      const data = event.data as any
+      if (data?.type === 'composio-auth-success') {
+        console.log('✅ Composio OAuth completed for', data.toolkit)
+        // Optionally: refresh UI or notify user
+      }
+      if (data?.type === 'composio-auth-error') {
+        console.warn('❌ Composio OAuth error:', data?.message || data?.error)
+      }
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
 
   return null
 }
