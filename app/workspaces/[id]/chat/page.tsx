@@ -20,7 +20,8 @@ function ChatInner({ workspaceId }: { workspaceId: string }) {
       const res = await fetch('/api/composio/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspaceId, toolkit, source: 'workspace' }),
+        // Use 'marketplace' source so the OAuth callback follows the popup postMessage+close pattern
+        body: JSON.stringify({ workspaceId, toolkit, source: 'marketplace' }),
       })
       if (!res.ok) {
         const t = await res.text()
