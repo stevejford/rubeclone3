@@ -28,8 +28,13 @@ export class ComposioClient {
 
   async linkOAuth(userId: string, toolkit: string, callbackUrl: string, state: string): Promise<ComposioConnectionResult> {
     const auth = await this.ensureAuthConfig(toolkit)
-    // Some SDK versions only accept { callbackUrl }
-    const res: any = await (this.sdk as any).connectedAccounts.link(userId, auth.id, { callbackUrl })
+    // Prefer passing state when supported by SDK; fall back to callbackUrl-only
+    let res: any
+    try {
+      res = await (this.sdk as any).connectedAccounts.link(userId, auth.id, { callbackUrl, state })
+    } catch {
+      res = await (this.sdk as any).connectedAccounts.link(userId, auth.id, { callbackUrl })
+    }
     return { redirectUrl: res?.redirectUrl ?? res?.redirect_url ?? callbackUrl, state, connectionId: res?.id ?? res?.connectionId }
   }
 
