@@ -113,9 +113,46 @@ export async function GET(request: NextRequest) {
     if (isComposioHosted) {
       // Handle Composio hosted authentication
       logger.info('callback_hosted_detected', { requestId })
-      
+
       if (success === 'true' && toolkit && userId) {
-        // Success case for hosted authentication
+        // Persist connection for the current workspace using state if present
+        // Attempt to decode state to identify workspace + source
+        let workspaceIdFromState: string | null = null
+        let sourceFromState: string = 'marketplace'
+        const stateParam = request.nextUrl.searchParams.get('state')
+        if (stateParam) {
+          try {
+            const decoded = JSON.parse(Buffer.from(stateParam, 'base64url').toString()) as any
+            workspaceIdFromState = decoded.workspaceId || null
+            sourceFromState = decoded.source || 'marketplace'
+          } catch (e) {
+            logger.warn('callback_hosted_state_decode_failed', { requestId, error: e instanceof Error ? e.message : String(e) })
+          }
+        }
+
+        // If we have a workspace id, enable/update tool for that workspace
+        if (workspaceIdFromState && !isNaN(parseInt(workspaceIdFromState))) {
+          try {
+            await enableWorkspaceTool(
+              parseInt(workspaceIdFromState),
+              toolkit,
+              parseInt(session.user.id),
+              {
+                connectionId: connectionId || '',
+                connectionStatus: 'connected',
+                lastSync: new Date().toISOString(),
+                connectedAt: new Date().toISOString(),
+              }
+            )
+            logger.info('callback_hosted_workspace_tool_enabled', { requestId, toolkit, workspaceId: workspaceIdFromState })
+          } catch (e) {
+            logger.error('callback_hosted_workspace_tool_enable_failed', { requestId, error: e instanceof Error ? e.message : String(e) })
+          }
+        } else {
+          logger.warn('callback_hosted_no_workspace_in_state', { requestId })
+        }
+
+        // Always send the marketplace-style success script to close popup and notify parent
         const successScript = `
           <html>
             <head><title>Connection Successful</title></head>
@@ -125,7 +162,6 @@ export async function GET(request: NextRequest) {
                 <p>This window will close automatically...</p>
               </div>
               <script>
-                // Notify the opener window (your main app) that auth is complete
                 if (window.opener) {
                   window.opener.postMessage({ 
                     type: 'composio-auth-success',
@@ -140,7 +176,7 @@ export async function GET(request: NextRequest) {
             </body>
           </html>
         `;
-        
+
         return new NextResponse(successScript, {
           headers: { 'Content-Type': 'text/html' },
         });
