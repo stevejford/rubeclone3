@@ -530,13 +530,15 @@ export async function executeTool(
       // ignore lookup issues, proceed without explicit connection id
     }
 
-    const result = await client.executeAction({
+    const execParams: { userId: string; toolkit: string; action: string; parameters: Record<string, any>; connectionId?: string } = {
       userId: composioUserId,
       toolkit,
       action,
       parameters,
-      connectionId,
-    })
+      ...(connectionId ? { connectionId } : {}),
+    }
+
+    const result = await client.executeAction(execParams)
 
     return {
       success: result.success,
