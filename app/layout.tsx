@@ -4,6 +4,7 @@ import { AuthProvider } from '@/components/providers/session-provider'
 import { WorkspaceProvider } from '@/lib/contexts/workspace-context'
 import { Toaster } from 'sonner'
 import './globals.css'
+import { ComposioAuthListener } from '@/components/global/composio-auth-listener'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -86,6 +87,8 @@ export default function RootLayout({
               <div className="flex-1">{children}</div>
             </div>
             <Toaster />
+            {/* Global listener so OAuth popup completion works on any page */}
+            <ComposioAuthListener />
           </WorkspaceProvider>
         </AuthProvider>
       </body>

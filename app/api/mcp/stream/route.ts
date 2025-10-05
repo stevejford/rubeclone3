@@ -132,7 +132,8 @@ async function handleJsonRpcRequest(rpcReq: JsonRpcRequest, req: NextRequest, ve
             body: JSON.stringify({
               workspaceId: verify.payload?.workspaceId,
               toolkit,
-              source: 'workspace',
+              // Use marketplace flow so callback posts message and auto-closes popup
+              source: 'marketplace',
             })
           })
 

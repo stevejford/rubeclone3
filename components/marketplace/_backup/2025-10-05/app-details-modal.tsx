@@ -1,0 +1,1 @@
+export * from '../../../marketplace/app-details-modal'
