@@ -99,12 +99,15 @@ export async function POST(request: NextRequest) {
     }
     logger.info('connect_start', { requestId, userId: session.user.id, workspaceId, toolkit, source, isPersonal: workspace.type === 'personal' })
 
-    // Build callback URL from request origin
-    const callbackUrl = new URL('/api/composio/callback', request.nextUrl.origin).toString()
+    // Build callback URL from request origin and include fallbacks for source/state
+    const state = encodeState(session.user.id, workspaceId.toString(), toolkit, source)
+    const callbackUrlObj = new URL('/api/composio/callback', request.nextUrl.origin)
+    callbackUrlObj.searchParams.set('source', source)
+    callbackUrlObj.searchParams.set('backup_state', state)
+    const callbackUrl = callbackUrlObj.toString()
 
     // Initiate OAuth via SDK facade
     const client = new ComposioClient()
-    const state = encodeState(session.user.id, workspaceId.toString(), toolkit, source)
     const connectionResult = await client.linkOAuth(
       composioUserId(session.user.id, workspaceId.toString(), workspace.type === 'personal'),
       toolkit,

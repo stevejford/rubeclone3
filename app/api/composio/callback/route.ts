@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
     // Verify user authentication
     const session = await getServerSession(getAuthOptions())
     if (!session?.user?.id) {
+      // For hosted flows, we still want to postMessage error and close the popup
       return redirectWithError(request, 'Authentication required')
     }
 
@@ -105,6 +106,8 @@ export async function GET(request: NextRequest) {
     }
 
     const { code, state, error, error_description, success, userId, toolkit, connectionId, message } = parseResult.data
+    // Fallback state from URL if provider dropped original state during hosted flow
+    const backupState = request.nextUrl.searchParams.get('backup_state') || undefined
 
     // Detect if this is Composio hosted authentication or traditional OAuth
     const isComposioHosted = !!(success || userId || toolkit || connectionId)
@@ -118,7 +121,7 @@ export async function GET(request: NextRequest) {
         // Persist connection for the current workspace using state if present
         // Attempt to decode state to identify workspace + source
         let workspaceIdFromState: string | null = null
-        const stateParam = request.nextUrl.searchParams.get('state')
+        const stateParam = request.nextUrl.searchParams.get('state') || backupState
         if (stateParam) {
           try {
             const decoded = JSON.parse(Buffer.from(stateParam, 'base64url').toString()) as any
