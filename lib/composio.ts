@@ -1,4 +1,5 @@
 import { aiConfig } from './env'
+import { getWorkspaceTool } from './db/queries'
 
 // Composio multi-tenant client following their architecture patterns
 // This implements proper user isolation and connected account management
@@ -162,6 +163,7 @@ class ComposioClient {
     toolkit: string
     action: string
     parameters: Record<string, any>
+    connectionId?: string
   }) {
     try {
       const response = await fetch(`${this.baseUrl}/tools/execute`, {
@@ -173,6 +175,10 @@ class ComposioClient {
         body: JSON.stringify({
           tool_slug: `${params.toolkit}_${params.action}`,
           user_id: params.userId, // Critical: User isolation for tool execution
+          // Some Composio environments require explicitly providing the connected account id
+          // Include both common field names for maximum compatibility
+          connected_account_id: params.connectionId,
+          connection_id: params.connectionId,
           params: params.parameters,
         }),
       })
@@ -515,12 +521,21 @@ export async function executeTool(
 
   try {
     const composioUserId = generateComposioUserId(userId, workspaceId, isPersonal)
-    
+    // Look up stored connection id for this workspace/toolkit
+    let connectionId: string | undefined = undefined
+    try {
+      const wsTool = await getWorkspaceTool(parseInt(workspaceId, 10), toolkit)
+      connectionId = wsTool?.connection_id || (wsTool?.config as any)?.connectionId
+    } catch {
+      // ignore lookup issues, proceed without explicit connection id
+    }
+
     const result = await client.executeAction({
       userId: composioUserId,
       toolkit,
       action,
       parameters,
+      connectionId,
     })
 
     return {
