@@ -21,9 +21,11 @@ const callbackParamsSchema = z.object({
   error_description: z.string().optional(),
   // Composio hosted authentication parameters
   success: z.string().optional(),
+  status: z.string().optional(),
   userId: z.string().optional(),
   toolkit: z.string().optional(),
   connectionId: z.string().optional(),
+  connected_account_id: z.string().optional(),
   message: z.string().optional(),
 }).passthrough() // Allow additional parameters from OAuth provider
 
@@ -55,9 +57,11 @@ export async function GET(request: NextRequest) {
       error_description: searchParams.get('error_description') ?? undefined,
       // Composio hosted authentication parameters
       success: searchParams.get('success') ?? undefined,
+      status: searchParams.get('status') ?? undefined,
       userId: searchParams.get('userId') ?? undefined,
       toolkit: searchParams.get('toolkit') ?? undefined,
       connectionId: searchParams.get('connectionId') ?? undefined,
+      connected_account_id: searchParams.get('connected_account_id') ?? undefined,
       message: searchParams.get('message') ?? undefined,
     }
 
@@ -78,9 +82,11 @@ export async function GET(request: NextRequest) {
         error: params.error,
         error_description: params.error_description,
         success: params.success,
+        status: params.status,
         userId: params.userId,
         toolkit: params.toolkit,
         connectionId: params.connectionId,
+        connected_account_id: params.connected_account_id,
         message: params.message,
       }
     })
@@ -105,27 +111,32 @@ export async function GET(request: NextRequest) {
       return redirectWithError(request, `Invalid callback parameters: ${parseResult.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`)
     }
 
-    const { code, state, error, error_description, success, userId, toolkit, connectionId, message } = parseResult.data
+    const { code, state, error, error_description, success, status, userId, toolkit, connectionId, connected_account_id, message } = parseResult.data
     // Fallback state from URL if provider dropped original state during hosted flow
     const backupState = request.nextUrl.searchParams.get('backup_state') || undefined
 
     // Detect if this is Composio hosted authentication or traditional OAuth
-    const isComposioHosted = !!(success || userId || toolkit || connectionId)
+    const isComposioHosted = !!(success || status || userId || toolkit || connectionId || connected_account_id)
     logger.info('callback_type', { requestId, type: isComposioHosted ? 'hosted' : 'traditional' })
 
     if (isComposioHosted) {
       // Handle Composio hosted authentication
       logger.info('callback_hosted_detected', { requestId })
 
-      if (success === 'true' && toolkit && userId) {
+      const hostedSuccess = (success === 'true' || status === 'success')
+      const finalConnectionId = connectionId || connected_account_id || ''
+
+      if (hostedSuccess) {
         // Persist connection for the current workspace using state if present
         // Attempt to decode state to identify workspace + source
         let workspaceIdFromState: string | null = null
+        let toolkitFromState: string | null = null
         const stateParam = request.nextUrl.searchParams.get('state') || backupState
         if (stateParam) {
           try {
             const decoded = JSON.parse(Buffer.from(stateParam, 'base64url').toString()) as any
             workspaceIdFromState = decoded.workspaceId || null
+            toolkitFromState = decoded.toolkit || null
           } catch (e) {
             logger.warn('callback_hosted_state_decode_failed', { requestId, error: e instanceof Error ? e.message : String(e) })
           }
@@ -136,16 +147,16 @@ export async function GET(request: NextRequest) {
           try {
             await enableWorkspaceTool(
               parseInt(workspaceIdFromState),
-              toolkit,
+              (toolkitFromState || toolkit || 'unknown_tool'),
               parseInt(session.user.id),
               {
-                connectionId: connectionId || '',
+                connectionId: finalConnectionId,
                 connectionStatus: 'connected',
                 lastSync: new Date().toISOString(),
                 connectedAt: new Date().toISOString(),
               }
             )
-            logger.info('callback_hosted_workspace_tool_enabled', { requestId, toolkit, workspaceId: workspaceIdFromState })
+            logger.info('callback_hosted_workspace_tool_enabled', { requestId, toolkit: (toolkitFromState || toolkit), workspaceId: workspaceIdFromState, connectionId: finalConnectionId })
           } catch (e) {
             logger.error('callback_hosted_workspace_tool_enable_failed', { requestId, error: e instanceof Error ? e.message : String(e) })
           }
@@ -159,17 +170,16 @@ export async function GET(request: NextRequest) {
             <head><title>Connection Successful</title></head>
             <body>
               <div style="text-align: center; padding: 50px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                <h2>🎉 Successfully connected ${toolkit}</h2>
+                <h2>🎉 Successfully connected ${(toolkitFromState || toolkit || 'app')}</h2>
                 <p>This window will close automatically...</p>
               </div>
               <script>
                 if (window.opener) {
                   window.opener.postMessage({ 
                     type: 'composio-auth-success',
-                    toolkit: '${toolkit}',
-                    connectionId: '${connectionId || ''}',
-                    userId: '${userId}',
-                    message: 'Successfully connected ${toolkit}'
+                    toolkit: '${(toolkitFromState || toolkit || 'app')}',
+                    connectionId: '${finalConnectionId}',
+                    message: 'Successfully connected ${(toolkitFromState || toolkit || 'app')}'
                   }, '*');
                   window.close();
                 }
