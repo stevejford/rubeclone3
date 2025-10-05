@@ -3,8 +3,9 @@ import { getServerSession } from 'next-auth'
 import { z } from 'zod'
 import { getAuthOptions } from '@/lib/auth'
 import { executeTool } from '@/lib/composio'
-import { getWorkspaceWithPermissions, getWorkspaceTool, recordToolUsage } from '@/lib/db/queries'
+import { getWorkspaceWithPermissions, getWorkspaceTool, recordToolUsage, getWorkspaceOwnerId } from '@/lib/db/queries'
 import { aiConfig } from '@/lib/env'
+import { verifyToken } from '@/lib/mcp/token'
 
 /**
  * Tool execution proxy endpoint for secure tool operations
@@ -30,11 +31,22 @@ export async function POST(request: NextRequest) {
 
     // Verify user authentication
     const session = await getServerSession(getAuthOptions())
+    // Allow either NextAuth session OR a valid MCP token for server-originated calls
+    let mcpAuth: { valid: boolean; payload?: any } | null = null
     if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
+      const secret = process.env.MCP_TOKEN_SECRET || aiConfig().composio.apiKey || ''
+      const authz = request.headers.get('authorization') || ''
+      let token = authz.startsWith('Bearer ') ? authz.slice(7) : ''
+      if (!token) token = new URL(request.url).searchParams.get('token') || ''
+      if (token && secret) {
+        mcpAuth = verifyToken(token, secret)
+      }
+      if (!mcpAuth?.valid) {
+        return NextResponse.json(
+          { error: 'Authentication required' },
+          { status: 401 }
+        )
+      }
     }
 
     // Parse and validate request body
@@ -57,7 +69,8 @@ export async function POST(request: NextRequest) {
     const { workspaceId, toolSlug, action, parameters } = parseResult.data
 
     // Verify workspace access permissions
-    const workspace = await getWorkspaceWithPermissions(workspaceId, parseInt(session.user.id))
+    const requesterUserId = session?.user?.id ? parseInt(session.user.id) : undefined
+    const workspace = await getWorkspaceWithPermissions(workspaceId, requesterUserId ?? -1)
     if (!workspace) {
       return NextResponse.json(
         { error: 'Workspace not found' },
@@ -65,15 +78,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if user has access to the workspace
-    const hasAccess = workspace.owner_id === parseInt(session.user.id) ||
-                     workspace.members?.some((m: any) => m.user_id === parseInt(session.user.id))
-    
-    if (!hasAccess) {
-      return NextResponse.json(
-        { error: 'Access denied to workspace' },
-        { status: 403 }
-      )
+    // Check if user has access to the workspace (skip for valid MCP token)
+    if (!mcpAuth?.valid) {
+      const hasAccess = workspace.owner_id === parseInt(session!.user!.id) ||
+                       workspace.members?.some((m: any) => m.user_id === parseInt(session!.user!.id))
+      if (!hasAccess) {
+        return NextResponse.json(
+          { error: 'Access denied to workspace' },
+          { status: 403 }
+        )
+      }
+    } else {
+      // If MCP token was used, ensure the token workspace matches the request body
+      if (Number(mcpAuth.payload?.workspaceId) !== workspaceId) {
+        return NextResponse.json(
+          { error: 'Workspace token mismatch' },
+          { status: 403 }
+        )
+      }
     }
 
     // Verify tool is enabled for the workspace
@@ -86,7 +108,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if tool has an active connection
-    if (!workspaceTool.connection_id) {
+    const cfg = workspaceTool.config as any
+    if (!workspaceTool.connection_id && !cfg?.connectionId) {
       return NextResponse.json(
         { error: 'Tool is not connected. Please connect the tool first.' },
         { status: 400 }
@@ -94,8 +117,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate connection status from config
-    const config = workspaceTool.config as any
-    if (config?.connectionStatus !== 'connected') {
+    if (cfg?.connectionStatus !== 'connected') {
       return NextResponse.json(
         { error: 'Tool connection is not active. Please reconnect the tool.' },
         { status: 400 }
@@ -103,8 +125,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Execute the tool action via Composio SDK
+    // Determine a userId to execute as: prefer session user; else tool enabled_by; else workspace owner
+    let execUserId = session?.user?.id ? session.user.id : undefined
+    if (!execUserId) {
+      execUserId = String(workspaceTool.enabled_by || (await getWorkspaceOwnerId(workspaceId)) || '0')
+    }
+
     const executionResult = await executeTool(
-      session.user.id,
+      execUserId,
       workspaceId.toString(),
       workspace.type === 'personal',
       toolSlug,
@@ -115,7 +143,7 @@ export async function POST(request: NextRequest) {
     // Record usage statistics for billing and analytics
     try {
       await recordToolUsage(
-        parseInt(session.user.id),
+        parseInt(execUserId),
         workspaceId,
         toolSlug,
         new Date()
