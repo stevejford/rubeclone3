@@ -351,6 +351,10 @@ function redirectWithError(request: NextRequest, error: string): NextResponse {
       const decoded = JSON.parse(Buffer.from(state, 'base64url').toString())
       workspaceId = decoded.workspaceId || null
       source = decoded.source || 'workspace'
+    } else {
+      // If state is missing (some hosted flows), fall back to direct source param
+      const src = request.nextUrl.searchParams.get('source')
+      if (src) source = src
     }
   } catch {
     // Ignore decode errors, use default redirect
